@@ -75,13 +75,22 @@ def teachers(e):
     return str(t)
 
 
+def place(s):
+    """«1.33К_2» → «К_2», «Альфа 5.13Альфа 5.13» → «Альфа 5.13»: убираем код аудитории."""
+    s = str(s).strip()
+    half = len(s) // 2
+    if len(s) % 2 == 0 and s[:half] == s[half:]:
+        s = s[:half]
+    return re.sub(r"^[\d.,\-]+\s*", "", s) or s
+
+
 def lesson(e):
     return {
         "start": str(pick(e, "startTime", "start_time", "timeStart", "start"))[:5],
         "end": str(pick(e, "endTime", "end_time", "timeEnd", "end"))[:5],
         "name": str(pick(e, "discipline", "name", "subject", "title")),
         "type": str(pick(e, "groupType", "lessonType", "lesson_type", "type")),
-        "room": str(pick(e, "classroom", "auditory", "room")),
+        "room": place(pick(e, "classroom", "auditory", "room")),
         "addr": str(pick(e, "address")),
         "teacher": teachers(e),
     }
