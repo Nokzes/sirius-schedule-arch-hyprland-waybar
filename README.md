@@ -20,10 +20,10 @@ makepkg -si
 
 ```sh
 mkdir -p ~/.config/sirius-schedule
-echo -n 'К0609-24' > ~/.config/sirius-schedule/group
+echo -n 'К0609-25/1' > ~/.config/sirius-schedule/group
 ```
 
-Или просто запустите `sirius-schedule К0609-24` — группа запомнится. В окне её можно поменять в поле сверху (Enter).
+Или просто запустите `sirius-schedule К0609-25/1` — группа запомнится. В окне её можно поменять в поле сверху (Enter).
 
 ## Модуль waybar
 
