@@ -150,10 +150,8 @@ def main():
         rows.append(line)
     tooltip = f"<b>{escape(group)} · {dt.date.today():%d.%m}</b>\n\n" + "\n".join(rows)
 
-    if cur:
-        text, cls = f"{cur['room'] or '—'} · {cur['name']}", "now"
-    elif nxt:
-        text, cls = f"Далее: {nxt['room'] or '—'} · {nxt['name']}", "next"
+    if nxt:
+        text, cls = f"{nxt['room'] or '—'} · {nxt['start']} · {nxt['name']}", "next"
     else:
         text, cls = "пары закончились", "done"
     out(escape(text), tooltip, cls)
