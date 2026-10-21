@@ -16,6 +16,30 @@ cd sirius-schedule-arch-hyprland-waybar
 makepkg -si
 ```
 
+### Без пакета
+
+Модулю waybar нужен только `python` — достаточно скачать один скрипт:
+
+```sh
+mkdir -p ~/.local/bin
+curl -o ~/.local/bin/sirius-waybar https://raw.githubusercontent.com/Nokzes/sirius-schedule-arch-hyprland-waybar/main/sirius-waybar
+chmod +x ~/.local/bin/sirius-waybar
+```
+
+В конфиге waybar тогда укажите полный путь: `"exec": "~/.local/bin/sirius-waybar"`.
+
+Окно тоже можно запускать без пакета (нужны `python-gobject` и `gtk4`):
+
+```sh
+sudo pacman -S --needed python-gobject gtk4
+curl -o ~/.local/bin/sirius-schedule https://raw.githubusercontent.com/Nokzes/sirius-schedule-arch-hyprland-waybar/main/sirius-schedule
+chmod +x ~/.local/bin/sirius-schedule
+```
+
+Удаление в этом случае — просто `rm ~/.local/bin/sirius-waybar ~/.local/bin/sirius-schedule`.
+
+### Группа
+
 По умолчанию используется группа `К0609-25/1`. Чтобы выбрать другую (как на сайте расписания):
 
 ```sh
