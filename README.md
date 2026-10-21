@@ -1,4 +1,4 @@
-# sirius-schedule
+# sirius-schedule — Arch Linux · Hyprland · Waybar
 
 Сегодняшнее расписание группы [Сириус колледжа](https://schedule.siriusuniversity.ru) для Arch Linux + Hyprland:
 
@@ -11,8 +11,8 @@
 ## Установка
 
 ```sh
-git clone https://github.com/Nokzes/sirius-schedule
-cd sirius-schedule
+git clone https://github.com/Nokzes/sirius-schedule-arch-hyprland-waybar
+cd sirius-schedule-arch-hyprland-waybar
 makepkg -si
 ```
 
