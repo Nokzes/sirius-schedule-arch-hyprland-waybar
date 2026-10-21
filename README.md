@@ -16,7 +16,7 @@ cd sirius-schedule
 makepkg -si
 ```
 
-Укажите свою группу (как на сайте расписания):
+По умолчанию используется группа `К0609-25/1`. Чтобы выбрать другую (как на сайте расписания):
 
 ```sh
 mkdir -p ~/.config/sirius-schedule
@@ -96,7 +96,3 @@ rm -rf ~/.config/sirius-schedule ~/.cache/sirius-schedule.json ~/.cache/sirius-w
 ```
 
 И уберите `custom/schedule` из конфига waybar.
-
-## Лицензия
-
-MIT

@@ -18,6 +18,7 @@ BASE = "https://schedule.siriusuniversity.ru"
 GRID = BASE + "/livewire/message/main-grid"
 APP_ID = "ru.sirius.schedule"
 CFG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "sirius-schedule" / "group"
+DEFAULT_GROUP = "К0609-25/1"
 CACHE = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "sirius-schedule.json"
 
 
@@ -139,7 +140,7 @@ def main():
     from gi.repository import Gdk, GLib, Gtk
 
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
-    group = args[0] if args else (CFG.read_text().strip() if CFG.exists() else "")
+    group = args[0] if args else ((CFG.read_text().strip() if CFG.exists() else "") or DEFAULT_GROUP)
     if args:
         CFG.parent.mkdir(parents=True, exist_ok=True)
         CFG.write_text(group)
@@ -242,7 +243,7 @@ def main():
 
 if __name__ == "__main__":
     if "--dump" in sys.argv:  # отладка: сырые события в stdout
-        g = next((a for a in sys.argv[1:] if not a.startswith("-")), None) or CFG.read_text().strip()
+        g = next((a for a in sys.argv[1:] if not a.startswith("-")), None) or (CFG.read_text().strip() if CFG.exists() else "") or DEFAULT_GROUP
         print(json.dumps(fetch_events(g), ensure_ascii=False, indent=1))
     else:
         main()
