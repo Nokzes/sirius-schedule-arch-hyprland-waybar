@@ -187,6 +187,13 @@ TYPES = {
     "Лабораторные занятия": "Лабораторная",
     "Внеучебное мероприятие": "Мероприятие",
 }
+TYPES_SHORT = {
+    "Лекции": "Лек",
+    "Семинарские занятия": "Сем",
+    "Практические занятия": "Прк",
+    "Лабораторные занятия": "Лаб",
+    "Внеучебное мероприятие": "Мер",
+}
 MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля",
           "августа", "сентября", "октября", "ноября", "декабря"]
 DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
@@ -259,7 +266,9 @@ def main():
     tooltip = make_tooltip(group, items, cur, nxt, now)
 
     if nxt:
-        text, cls = f"{nxt['room'] or '—'} · {nxt['start']} · {short_name(nxt['name'])}", "next"
+        kind = TYPES_SHORT.get(nxt["type"], nxt["type"][:3])
+        kind = f"{kind}. " if kind else ""
+        text, cls = f"{nxt['room'] or '—'} · {nxt['start']} · {kind}{short_name(nxt['name'])}", "next"
     else:
         text, cls = "пары закончились", "done"
     out(escape(text), tooltip, cls)
