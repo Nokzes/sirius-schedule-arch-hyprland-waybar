@@ -75,7 +75,7 @@ echo -n 'К0609-25/1' > ~/.config/sirius-schedule/group
    "modules-left": ["hyprland/workspaces", "custom/schedule"],
    ```
 
-3. Стили — в `~/.config/waybar/style.css` (пример в [`waybar/style.css`](waybar/style.css)). Классы: `next` (есть следующая пара), `done`, `free`, `error`.
+3. Стили — в `~/.config/waybar/style.css` (пример в [`waybar/style.css`](waybar/style.css)). Классы: `next` (есть следующая пара), `last` (идёт последняя пара), `done`, `free`, `error`.
 
 4. Перезапустите waybar: `pkill -SIGUSR2 waybar`.
 
@@ -84,7 +84,8 @@ echo -n 'К0609-25/1' > ~/.config/sirius-schedule/group
 | Ситуация | Текст |
 |---|---|
 | Есть следующая пара | `К_2 · 11:55 · Лек. Физика` |
-| Следующих пар сегодня нет | `пары закончились` |
+| Идёт последняя пара | `Последняя пара до 19:35` |
+| Пары закончились | `пары закончились` |
 | Пар нет | `пар нет` |
 | Нет сети и нет кэша | `нет связи` |
 

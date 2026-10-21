@@ -265,10 +265,14 @@ def main():
 
     tooltip = make_tooltip(group, items, cur, nxt, now)
 
+    def label(l):
+        kind = TYPES_SHORT.get(l["type"], l["type"][:3])
+        return f"{kind}. {short_name(l['name'])}" if kind else short_name(l["name"])
+
     if nxt:
-        kind = TYPES_SHORT.get(nxt["type"], nxt["type"][:3])
-        kind = f"{kind}. " if kind else ""
-        text, cls = f"{nxt['room'] or '—'} · {nxt['start']} · {kind}{short_name(nxt['name'])}", "next"
+        text, cls = f"{nxt['room'] or '—'} · {nxt['start']} · {label(nxt)}", "next"
+    elif cur:  # идёт последняя пара дня
+        text, cls = f"Последняя пара до {cur['end']}", "last"
     else:
         text, cls = "пары закончились", "done"
     out(escape(text), tooltip, cls)
