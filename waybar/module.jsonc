@@ -1,0 +1,9 @@
+"custom/schedule": {
+  "exec": "sirius-waybar",
+  "return-type": "json",
+  "interval": 60,
+  "signal": 8,
+  "max-length": 60,
+  "tooltip": true,
+  "on-click": "pkill -RTMIN+8 waybar"
+}

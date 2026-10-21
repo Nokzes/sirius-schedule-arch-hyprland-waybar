@@ -1,0 +1,13 @@
+#custom-schedule {
+  padding: 0 10px;
+  margin-left: 40px;
+  color: #b7bdf8;
+}
+
+#custom-schedule.now {
+  color: #a6da95;
+}
+
+#custom-schedule.error {
+  color: #ed8796;
+}

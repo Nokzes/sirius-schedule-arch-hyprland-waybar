@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Расписание Сириус
+Comment=Сегодняшнее расписание группы
+Exec=sirius-schedule
+Icon=x-office-calendar
+Terminal=false
+Categories=Education;Utility;
+StartupWMClass=ru.sirius.schedule

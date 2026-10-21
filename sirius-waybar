@@ -1,0 +1,165 @@
+#!/usr/bin/python3 -I
+"""Модуль waybar: текущая пара группы Сириус колледжа, в подсказке — все пары на сегодня.
+
+Протокол Livewire взят из https://github.com/PerovXP/pyrinium.
+Сеть дёргается не чаще раза в REFRESH секунд, в остальное время — данные из кэша.
+"""
+import datetime as dt
+import json
+import os
+import re
+import sys
+import time
+from html import escape
+from pathlib import Path
+
+BASE = "https://schedule.siriusuniversity.ru"
+REFRESH = 3 * 3600
+CFG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "sirius-schedule" / "group"
+CACHE = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "sirius-waybar.json"
+
+
+def fetch_events(group):
+    import http.cookiejar
+    import urllib.request
+
+    op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    op.addheaders = [("User-Agent", "Mozilla/5.0")]
+    html = op.open(BASE, timeout=15).read().decode()
+    token = re.search(r"window.livewire_token = '([0-9A-Za-z]+)';", html)[1]
+    init = json.loads(re.search(r'wire:initial-data="([^"]+)"', html)[1].replace("&quot;", '"'))
+    body = json.dumps({
+        "fingerprint": init["fingerprint"],
+        "serverMemo": init["serverMemo"],
+        "updates": [{"type": "callMethod", "payload": {"id": os.urandom(4).hex(), "method": "set", "params": [group]}}],
+    }).encode()
+    req = urllib.request.Request(BASE + "/livewire/message/main-grid", body, {
+        "X-Livewire": "true", "X-Csrf-Token": token, "Content-Type": "application/json",
+    })
+    events = json.loads(op.open(req, timeout=15).read())["serverMemo"]["data"].get("events") or {}
+    if isinstance(events, dict):
+        out = []
+        for key, items in events.items():
+            for e in items if isinstance(items, list) else [items]:
+                if isinstance(e, dict):
+                    e.setdefault("_key", key)  # ключ может быть датой
+                    out.append(e)
+        return out
+    return [e for e in events if isinstance(e, dict)]
+
+
+def pick(e, *keys):
+    for k in keys:
+        v = e.get(k)
+        if v not in (None, "", [], {}):
+            return v
+    return ""
+
+
+def parse_date(s):
+    s = str(s)
+    if m := re.search(r"(\d{4})-(\d{2})-(\d{2})", s):
+        return dt.date(int(m[1]), int(m[2]), int(m[3]))
+    if m := re.search(r"(\d{2})\.(\d{2})\.(\d{4})", s):
+        return dt.date(int(m[3]), int(m[2]), int(m[1]))
+    return None
+
+
+def teachers(e):
+    t = pick(e, "teachers", "teacher", "teacherFio", "fio")
+    if isinstance(t, dict):
+        t = list(t.values())
+    if isinstance(t, list):
+        t = ", ".join((x.get("fio") or x.get("name") or "") if isinstance(x, dict) else str(x) for x in t)
+    return str(t)
+
+
+def lesson(e):
+    return {
+        "start": str(pick(e, "startTime", "start_time", "timeStart", "start"))[:5],
+        "end": str(pick(e, "endTime", "end_time", "timeEnd", "end"))[:5],
+        "name": str(pick(e, "discipline", "name", "subject", "title")),
+        "type": str(pick(e, "groupType", "lessonType", "lesson_type", "type")),
+        "room": str(pick(e, "classroom", "auditory", "room")),
+        "addr": str(pick(e, "address")),
+        "teacher": teachers(e),
+    }
+
+
+def today_lessons(events, day):
+    res = [lesson(e) for e in events
+           if (parse_date(pick(e, "date", "day")) or parse_date(e.get("_key", ""))) == day]
+    return sorted(res, key=lambda x: x["start"])
+
+
+def load_events(group):
+    try:
+        c = json.loads(CACHE.read_text())
+        if c["group"] != group:
+            c = None
+    except Exception:
+        c = None
+    monday = (dt.date.today() - dt.timedelta(days=dt.date.today().weekday())).isoformat()
+    fresh = c and c["week"] == monday and time.time() - c["ts"] < REFRESH
+    if not fresh:
+        try:
+            c = {"group": group, "week": monday, "ts": time.time(), "events": fetch_events(group)}
+            CACHE.parent.mkdir(parents=True, exist_ok=True)
+            CACHE.write_text(json.dumps(c, ensure_ascii=False))
+        except Exception as err:
+            if not c or c["week"] != monday:  # кэш другой недели бесполезен
+                raise err
+    return c["events"]
+
+
+def where(l):
+    return ", ".join(x for x in (l["room"], l["addr"]) if x)
+
+
+def out(text, tooltip="", cls=""):
+    print(json.dumps({"text": text, "tooltip": tooltip, "class": cls}, ensure_ascii=False))
+
+
+def main():
+    group = CFG.read_text().strip() if CFG.exists() else ""
+    if not group:
+        return out("группа?", f"Укажите группу в {CFG}", "error")
+    try:
+        items = today_lessons(load_events(group), dt.date.today())
+    except Exception as e:
+        return out("нет связи", escape(f"Не удалось загрузить расписание: {e}"), "error")
+
+    if not items:
+        return out("пар нет", f"{group}: сегодня пар нет", "free")
+
+    now = dt.datetime.now().strftime("%H:%M")
+    cur = next((l for l in items if l["start"] <= now < l["end"]), None)
+    nxt = next((l for l in items if l["start"] > now), None)
+
+    rows = []
+    for l in items:
+        line = f"{l['start']}–{l['end']}  {escape(l['name'])}"
+        meta = " · ".join(escape(x) for x in (l["type"], where(l), l["teacher"]) if x)
+        if meta:
+            line += f"\n<small>             {meta}</small>"
+        if l is cur:
+            line = f"<b>▶ {line}</b>"
+        elif l["end"] <= now:
+            line = f"<span alpha='50%'>{line}</span>"
+        rows.append(line)
+    tooltip = f"<b>{escape(group)} · {dt.date.today():%d.%m}</b>\n\n" + "\n".join(rows)
+
+    if cur:
+        text, cls = f"{cur['name']} · {cur['room'] or '—'}", "now"
+    elif nxt:
+        text, cls = f"Далее: {nxt['name']} · {nxt['room'] or '—'}", "next"
+    else:
+        text, cls = "пары закончились", "done"
+    out(escape(text), tooltip, cls)
+
+
+if __name__ == "__main__":
+    if "--dump" in sys.argv:  # отладка: сырые события
+        print(json.dumps(fetch_events(CFG.read_text().strip()), ensure_ascii=False, indent=1))
+    else:
+        main()

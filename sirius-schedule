@@ -1,0 +1,248 @@
+#!/usr/bin/python3 -I
+"""Окно с сегодняшним расписанием группы Сириус колледжа (GTK4).
+
+Протокол Livewire взят из https://github.com/PerovXP/pyrinium.
+Сначала мгновенно показывается кэш, затем расписание обновляется в фоне.
+"""
+import datetime as dt
+import http.cookiejar
+import json
+import os
+import re
+import sys
+import threading
+import urllib.request
+from pathlib import Path
+
+BASE = "https://schedule.siriusuniversity.ru"
+GRID = BASE + "/livewire/message/main-grid"
+APP_ID = "ru.sirius.schedule"
+CFG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "sirius-schedule" / "group"
+CACHE = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "sirius-schedule.json"
+
+
+# ---------- сеть ----------
+
+def fetch_events(group):
+    op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    op.addheaders = [("User-Agent", "Mozilla/5.0")]
+    html = op.open(BASE, timeout=15).read().decode()
+    token = re.search(r"window.livewire_token = '([0-9A-Za-z]+)';", html)[1]
+    init = json.loads(re.search(r'wire:initial-data="([^"]+)"', html)[1].replace("&quot;", '"'))
+    body = json.dumps({
+        "fingerprint": init["fingerprint"],
+        "serverMemo": init["serverMemo"],
+        "updates": [{"type": "callMethod", "payload": {"id": os.urandom(4).hex(), "method": "set", "params": [group]}}],
+    }).encode()
+    req = urllib.request.Request(GRID, body, {
+        "X-Livewire": "true", "X-Csrf-Token": token, "Content-Type": "application/json",
+    })
+    data = json.loads(op.open(req, timeout=15).read())["serverMemo"]["data"]
+    events = data.get("events") or {}
+    if isinstance(events, dict):
+        # ключи словаря могут быть датами — сохраним их в событии
+        out = []
+        for key, items in events.items():
+            for e in items if isinstance(items, list) else [items]:
+                if isinstance(e, dict):
+                    e.setdefault("_key", key)
+                    out.append(e)
+        return out
+    return [e for e in events if isinstance(e, dict)]
+
+
+# ---------- разбор событий ----------
+
+def pick(e, *keys):
+    for k in keys:
+        v = e.get(k)
+        if v not in (None, "", [], {}):
+            return v
+    return ""
+
+
+def parse_date(s):
+    s = str(s)
+    m = re.search(r"(\d{4})-(\d{2})-(\d{2})", s)
+    if m:
+        return dt.date(int(m[1]), int(m[2]), int(m[3]))
+    m = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", s)
+    if m:
+        return dt.date(int(m[3]), int(m[2]), int(m[1]))
+    return None
+
+
+def teachers(e):
+    t = pick(e, "teachers", "teacher", "teacherFio", "fio")
+    if isinstance(t, dict):
+        t = list(t.values())
+    if isinstance(t, list):
+        t = ", ".join(x.get("fio") or x.get("name") or "" if isinstance(x, dict) else str(x) for x in t)
+    return str(t)
+
+
+def lesson(e):
+    return {
+        "start": str(pick(e, "startTime", "start_time", "timeStart", "start"))[:5],
+        "end": str(pick(e, "endTime", "end_time", "timeEnd", "end"))[:5],
+        "name": str(pick(e, "discipline", "name", "subject", "title")),
+        "type": str(pick(e, "groupType", "lessonType", "lesson_type", "type")),
+        "room": str(pick(e, "classroom", "auditory", "room")),
+        "addr": str(pick(e, "address")),
+        "teacher": teachers(e),
+    }
+
+
+def today_lessons(events, day):
+    res = [lesson(e) for e in events
+           if (parse_date(pick(e, "date", "day")) or parse_date(e.get("_key", ""))) == day]
+    return sorted(res, key=lambda x: x["start"])
+
+
+# ---------- кэш ----------
+
+def load_cache(group):
+    try:
+        c = json.loads(CACHE.read_text())
+        if c["group"] == group:
+            return c["events"]
+    except Exception:
+        pass
+    return None
+
+
+def save_cache(group, events):
+    try:
+        CACHE.parent.mkdir(parents=True, exist_ok=True)
+        CACHE.write_text(json.dumps({"group": group, "events": events}, ensure_ascii=False))
+    except OSError:
+        pass
+
+
+# ---------- GUI ----------
+
+CSS = b"""
+window { background: #1e1e2e; color: #cdd6f4; }
+.title { font-size: 18px; font-weight: bold; }
+.dim { color: #9399b2; font-size: 12px; }
+.card { background: #313244; border-radius: 10px; padding: 10px 14px; }
+.card.now { background: #45475a; border-left: 4px solid #a6e3a1; }
+.time { font-family: monospace; font-weight: bold; color: #89b4fa; }
+.name { font-weight: bold; font-size: 15px; }
+entry { background: #313244; color: #cdd6f4; }
+"""
+
+
+def main():
+    import gi
+    gi.require_version("Gtk", "4.0")
+    from gi.repository import Gdk, GLib, Gtk
+
+    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    group = args[0] if args else (CFG.read_text().strip() if CFG.exists() else "")
+    if args:
+        CFG.parent.mkdir(parents=True, exist_ok=True)
+        CFG.write_text(group)
+
+    def on_activate(app):
+        win = Gtk.ApplicationWindow(application=app, title="Расписание")
+        win.set_default_size(440, 560)
+
+        prov = Gtk.CssProvider()
+        prov.load_from_data(CSS)
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), prov, 600)
+
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", lambda c, k, *_: (k in (Gdk.KEY_Escape, Gdk.KEY_q)) and (win.close() or True))
+        win.add_controller(keys)
+
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin_top=12,
+                       margin_bottom=12, margin_start=12, margin_end=12)
+        win.set_child(root)
+
+        today = dt.date.today()
+        days = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
+        head = Gtk.Box(spacing=8)
+        title = Gtk.Label(label=f"{today:%d.%m} · {days[today.weekday()]}", xalign=0, hexpand=True)
+        title.add_css_class("title")
+        entry = Gtk.Entry(text=group, placeholder_text="Группа, напр. К0609-24", width_chars=12)
+        head.append(title)
+        head.append(entry)
+        root.append(head)
+
+        status = Gtk.Label(xalign=0)
+        status.add_css_class("dim")
+        root.append(status)
+
+        listbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        root.append(Gtk.ScrolledWindow(child=listbox, vexpand=True))
+
+        def render(events):
+            while (c := listbox.get_first_child()):
+                listbox.remove(c)
+            items = today_lessons(events, today)
+            if not items:
+                listbox.append(Gtk.Label(label="Сегодня пар нет 🎉", margin_top=40))
+                return
+            now = dt.datetime.now().strftime("%H:%M")
+            for l in items:
+                card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+                card.add_css_class("card")
+                if l["start"] <= now < l["end"]:
+                    card.add_css_class("now")
+                tl = Gtk.Label(label=f"{l['start']}–{l['end']}", xalign=0)
+                tl.add_css_class("time")
+                nl = Gtk.Label(label=l["name"], xalign=0, wrap=True)
+                nl.add_css_class("name")
+                card.append(tl)
+                card.append(nl)
+                extra = " · ".join(x for x in (l["type"], l["room"], l["addr"]) if x)
+                for text in (extra, l["teacher"]):
+                    if text:
+                        lb = Gtk.Label(label=text, xalign=0, wrap=True)
+                        lb.add_css_class("dim")
+                        card.append(lb)
+                listbox.append(card)
+
+        def refresh(g):
+            if not g:
+                status.set_text("Введите группу и нажмите Enter")
+                return
+            cached = load_cache(g)
+            if cached is not None:
+                render(cached)
+                status.set_text("Из кэша, обновляю…")
+            else:
+                status.set_text("Загрузка…")
+
+            def work():
+                try:
+                    ev = fetch_events(g)
+                    save_cache(g, ev)
+                    GLib.idle_add(lambda: (render(ev), status.set_text(f"Группа {g} · обновлено {dt.datetime.now():%H:%M}")) and False)
+                except Exception as e:
+                    GLib.idle_add(lambda: status.set_text(f"Ошибка: {e}") and False)
+
+            threading.Thread(target=work, daemon=True).start()
+
+        def on_entry(w):
+            g = w.get_text().strip()
+            CFG.parent.mkdir(parents=True, exist_ok=True)
+            CFG.write_text(g)
+            refresh(g)
+
+        entry.connect("activate", on_entry)
+        refresh(group)
+        win.present()
+
+    app = Gtk.Application(application_id=APP_ID)
+    app.connect("activate", on_activate)
+    app.run(None)
+
+
+if __name__ == "__main__":
+    if "--dump" in sys.argv:  # отладка: сырые события в stdout
+        g = next((a for a in sys.argv[1:] if not a.startswith("-")), None) or CFG.read_text().strip()
+        print(json.dumps(fetch_events(g), ensure_ascii=False, indent=1))
+    else:
+        main()
