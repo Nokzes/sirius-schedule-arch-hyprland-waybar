@@ -18,6 +18,23 @@ REFRESH = 3 * 3600
 CFG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "sirius-schedule" / "group"
 DEFAULT_GROUP = "К0609-25/1"
 CACHE = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "sirius-waybar.json"
+SHORT_CFG = CFG.with_name("short")  # свои сокращения: «Полное название = Коротко» по строке
+
+SHORT = {
+    "Архитектура ИТ-систем и аппаратных средств": "Архитектура ИТ-систем",
+    "Дискретная математика с элементами математической логики": "Дискретная математика",
+    "Инженерная компьютерная графика": "Инженерная графика",
+    "Иностранный язык в профессиональной деятельности": "Иностранный язык",
+    "Операционные системы и среды": "ОС и среды",
+    "Организация администрирования ИТ-систем": "Администрирование ИТ",
+    "Основы проектирования баз данных": "Проектирование БД",
+    "Основы работы с сетевыми операционными системами": "Сетевые ОС",
+    "ПА продленное, Математика (Э)": "Пересдача: математика",
+    "Приемопередающие устройства, линейные сооружения связи и источники электропитания": "Приёмопередающие устройства",
+    "Программирование на языке Python": "Python",
+    "Физическая культура": "Физкультура",
+    "Элементы высшей математики": "Высшая математика",
+}
 
 
 def fetch_events(group):
@@ -122,6 +139,33 @@ def load_events(group):
     return c["events"]
 
 
+def short_word(w):
+    """«операционными» → «опер.»: обрезаем перед гласной, как в обычных сокращениях."""
+    if len(w) <= 6 or not w.isalpha():
+        return w
+    i = 3
+    while i < len(w) - 2 and w[i].lower() not in "аеёиоуыэюяaeiouy":
+        i += 1
+    return w[:i] + "."
+
+
+def short_name(name):
+    table = dict(SHORT)
+    try:
+        for line in SHORT_CFG.read_text().splitlines():
+            if "=" in line:
+                k, v = line.split("=", 1)
+                table[k.strip()] = v.strip()
+    except OSError:
+        pass
+    if name in table:
+        return table[name]
+    if len(name) <= 30:
+        return name
+    name = name.split(",")[0]
+    return name if len(name) <= 30 else " ".join(short_word(w) for w in name.split())
+
+
 def where(l):
     return ", ".join(x for x in (l["room"], l["addr"]) if x)
 
@@ -160,7 +204,7 @@ def main():
     tooltip = f"<b>{escape(group)} · {dt.date.today():%d.%m}</b>\n\n" + "\n".join(rows)
 
     if nxt:
-        text, cls = f"{nxt['room'] or '—'} · {nxt['start']} · {nxt['name']}", "next"
+        text, cls = f"{nxt['room'] or '—'} · {nxt['start']} · {short_name(nxt['name'])}", "next"
     else:
         text, cls = "пары закончились", "done"
     out(escape(text), tooltip, cls)
