@@ -89,14 +89,21 @@ echo -n 'К0609-25/1' > ~/.config/sirius-schedule/group
 
 ## Окно в Hyprland
 
-`~/.config/hypr/hyprland.conf`:
+`~/.config/hypr/hyprland.lua`:
 
-```ini
-windowrulev2 = float, class:^(ru.sirius.schedule)$
-windowrulev2 = size 440 560, class:^(ru.sirius.schedule)$
-windowrulev2 = center, class:^(ru.sirius.schedule)$
-bind = $mainMod, S, exec, sirius-schedule
+```lua
+hl.window_rule({
+    name  = "sirius-schedule",
+    match = { class = "^(ru\\.sirius\\.schedule)$" },
+    float  = true,
+    size   = "440 560",
+    center = true,
+})
+
+hl.bind("SUPER + S", hl.dsp.exec_cmd("sirius-schedule"))
 ```
+
+Проверить конфиг: `Hyprland --verify-config -c ~/.config/hypr/hyprland.lua`.
 
 `Esc` или `q` закрывает окно.
 
