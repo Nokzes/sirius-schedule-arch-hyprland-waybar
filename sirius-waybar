@@ -83,12 +83,19 @@ def parse_date(s):
     return None
 
 
+def short_fio(x):
+    """«Лагаев Арсен Нурланович» → «Лагаев А. Н.»"""
+    if x.get("last_name"):
+        return " ".join([x["last_name"]] + [f"{x[k]}." for k in ("first_name_one", "middle_name_one") if x.get(k)])
+    return x.get("fio") or x.get("name") or ""
+
+
 def teachers(e):
     t = pick(e, "teachers", "teacher", "teacherFio", "fio")
     if isinstance(t, dict):
         t = list(t.values())
     if isinstance(t, list):
-        t = ", ".join((x.get("fio") or x.get("name") or "") if isinstance(x, dict) else str(x) for x in t)
+        t = ", ".join(short_fio(x) if isinstance(x, dict) else str(x) for x in t)
     return str(t)
 
 
@@ -110,6 +117,7 @@ def lesson(e):
         "room": place(pick(e, "classroom", "auditory", "room")),
         "addr": str(pick(e, "address")),
         "teacher": teachers(e),
+        "num": e.get("numberPair"),
     }
 
 
@@ -170,6 +178,64 @@ def where(l):
     return ", ".join(x for x in (l["room"], l["addr"]) if x)
 
 
+# цвета Catppuccin Macchiato
+C_TEXT, C_SUB, C_DIM, C_GREEN, C_BLUE = "#cad3f5", "#a5adcb", "#6e738d", "#a6da95", "#8aadf4"
+TYPES = {
+    "Лекции": "Лекция",
+    "Семинарские занятия": "Семинар",
+    "Практические занятия": "Практика",
+    "Лабораторные занятия": "Лабораторная",
+    "Внеучебное мероприятие": "Мероприятие",
+}
+MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля",
+          "августа", "сентября", "октября", "ноября", "декабря"]
+DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
+
+
+def plural(n, one, few, many):
+    if n % 10 == 1 and n % 100 != 11:
+        return one
+    return few if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14 else many
+
+
+def minutes_until(hhmm):
+    h, m = map(int, hhmm.split(":"))
+    now = dt.datetime.now()
+    return h * 60 + m - now.hour * 60 - now.minute
+
+
+def make_tooltip(group, items, cur, nxt, now):
+    today = dt.date.today()
+    n = len(items)
+    rows = [
+        f"<span size='large'><b>{DAYS[today.weekday()]}, {today.day} {MONTHS[today.month - 1]}</b></span>",
+        f"<span color='{C_SUB}'>{escape(group)} · {n} {plural(n, 'пара', 'пары', 'пар')}</span>",
+    ]
+    for l in items:
+        past = l["end"] <= now
+        if l is cur:
+            mark, color, note = "●", C_GREEN, "сейчас"
+        elif l is nxt:
+            mins = minutes_until(l["start"])
+            mark, color = "○", C_BLUE
+            note = f"через {mins // 60} ч {mins % 60} мин" if mins >= 60 else f"через {mins} мин"
+        elif past:
+            mark, color, note = "✓", C_DIM, ""
+        else:
+            mark, color, note = "○", C_DIM, ""
+        num = f"{l['num']} пара" if l["num"] else ""
+        info = " · ".join(x for x in (num, note) if x)
+        meta = " · ".join(escape(x) for x in (TYPES.get(l["type"], l["type"]), l["room"], l["teacher"]) if x)
+        name_color, meta_color = (C_DIM, C_DIM) if past else (C_TEXT, C_SUB)
+        rows.append("")
+        rows.append(f"<span color='{color}'>{mark}</span>  <span color='{name_color}'><b>{l['start']}–{l['end']}</b></span>"
+                    + (f"  <span color='{color if note else C_DIM}'>{info}</span>" if info else ""))
+        rows.append(f"   <span color='{name_color}'>{escape(l['name'])}</span>")
+        if meta:
+            rows.append(f"   <span size='small' color='{meta_color}'>{meta}</span>")
+    return "\n".join(rows)
+
+
 def out(text, tooltip="", cls=""):
     print(json.dumps({"text": text, "tooltip": tooltip, "class": cls}, ensure_ascii=False))
 
@@ -190,18 +256,7 @@ def main():
     cur = next((l for l in items if l["start"] <= now < l["end"]), None)
     nxt = next((l for l in items if l["start"] > now), None)
 
-    rows = []
-    for l in items:
-        line = f"{l['start']}–{l['end']}  {escape(l['name'])}"
-        meta = " · ".join(escape(x) for x in (l["type"], where(l), l["teacher"]) if x)
-        if meta:
-            line += f"\n<small>             {meta}</small>"
-        if l is cur:
-            line = f"<b>▶ {line}</b>"
-        elif l["end"] <= now:
-            line = f"<span alpha='50%'>{line}</span>"
-        rows.append(line)
-    tooltip = f"<b>{escape(group)} · {dt.date.today():%d.%m}</b>\n\n" + "\n".join(rows)
+    tooltip = make_tooltip(group, items, cur, nxt, now)
 
     if nxt:
         text, cls = f"{nxt['room'] or '—'} · {nxt['start']} · {short_name(nxt['name'])}", "next"

@@ -11,3 +11,16 @@
 #custom-schedule.error {
   color: #ed8796;
 }
+
+/* Подсказка при наведении (влияет на все модули waybar) */
+tooltip {
+  background-color: #1e2030;
+  border: 1px solid #494d64;
+  border-radius: 12px;
+}
+
+tooltip label {
+  color: #cad3f5;
+  font-size: 15px;
+  padding: 6px 8px;
+}
