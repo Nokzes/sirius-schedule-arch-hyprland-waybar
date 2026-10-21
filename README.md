@@ -51,6 +51,10 @@ echo -n 'К0609-25/1' > ~/.config/sirius-schedule/group
 
 ## Модуль waybar
 
+> 📖 **Подробная пошаговая инструкция с примерами и решением проблем — [docs/WAYBAR.md](docs/WAYBAR.md).**
+
+Кратко:
+
 1. Добавьте модуль в `~/.config/waybar/config` (содержимое [`waybar/module.jsonc`](waybar/module.jsonc)):
 
    ```jsonc
