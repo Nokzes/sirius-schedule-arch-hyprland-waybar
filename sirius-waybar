@@ -274,7 +274,7 @@ def main():
     elif cur:  # идёт последняя пара дня
         text, cls = f"Последняя пара до {cur['end']}", "last"
     else:
-        text, cls = "пары закончились", "done"
+        text, cls = "Пары закончились", "done"
     out(escape(text), tooltip, cls)
 
 
