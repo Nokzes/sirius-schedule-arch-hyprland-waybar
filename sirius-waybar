@@ -250,14 +250,14 @@ def out(text, tooltip="", cls=""):
 def main():
     group = (CFG.read_text().strip() if CFG.exists() else "") or DEFAULT_GROUP
     if not group:
-        return out("группа?", f"Укажите группу в {CFG}", "error")
+        return out("Группа?", f"Укажите группу в {CFG}", "error")
     try:
         items = today_lessons(load_events(group), dt.date.today())
     except Exception as e:
-        return out("нет связи", escape(f"Не удалось загрузить расписание: {e}"), "error")
+        return out("Нет связи", escape(f"Не удалось загрузить расписание: {e}"), "error")
 
     if not items:
-        return out("пар нет", f"{group}: сегодня пар нет", "free")
+        return out("Пар нет", f"{group}: сегодня пар нет", "free")
 
     now = dt.datetime.now().strftime("%H:%M")
     cur = next((l for l in items if l["start"] <= now < l["end"]), None)
